@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Tic Tac Toe (Max 3)</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --grid-line: #333;
+            --player-color: #00e5ff; /* Cyan */
+            --player-glow: rgba(0, 229, 255, 0.6);
+            --ai-color: #ff2975; /* Pink */
+            --ai-glow: rgba(255, 41, 117, 0.6);
+            --text-color: #ffffff;
+            --accent: #7c4dff;
+            --cell-size: 120px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(255,255,255,0.2);
+        }
+
+        .rules {
+            font-size: 0.9rem;
+            color: #aaa;
+            background: rgba(255,255,255,0.05);
+            padding: 5px 15px;
+            border-radius: 15px;
+            display: inline-block;
+        }
+
+        /* --- Status Bar --- */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--surface-color);
+            padding: 15px 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            margin-bottom: 30px;
+            width: 90%;
+            max-width: 400px;
+            border: 1px solid #333;
+        }
+
+        .turn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .turn-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--player-color);
+            box-shadow: 0 0 10px var(--player-color);
+            transition: all 0.3s ease;
+        }
+
+        .turn-dot.ai-turn {
+            background-color: var(--ai-color);
+            box-shadow: 0 0 10px var(--ai-color);
+        }
+
+        .counter {
+            font-family: monospace;
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* --- Board --- */
+        .game-container {
+            position: relative;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: calc(var(--cell-size) * 3);
+            height: calc(var(--cell-size) * 3);
+            background-color: var(--surface-color);
+            border: 2px solid #444;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0,0,0,0.6);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .cell {
+            border: 1px solid var(--grid-line);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .cell:hover {
+            background-color: rgba(255,255,255,0.03);
+        }
+
+        /* Pieces */
+        .piece {
+            width: 60%;
+            height: 60%;
+            border-radius: 50%;
+            transform: scale(0);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            z-index: 2;
+        }
+
+        .piece.player {
+            background-color: var(--player-color);
+            box-shadow: 0 0 15px var(--player-glow);
+        }
+
+        .piece.ai {
+            background-color: var(--ai-color);
+            box-shadow: 0 0 15px var(--ai-glow);
+        }
+
+        /* Animation for when a piece is removed */
+        .piece.removing {
+            animation: shrinkOut 0.4s forwards;
+        }
+
+        .cell.win-highlight {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        @keyframes popIn {
+            to { transform: scale(1); }
+        }
+
+        @keyframes shrinkOut {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+
+        /* --- Modal --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: #252525;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid #444;
+            transform: translateY(20px);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-width: 90%;
+            width: 320px;
+        }
+
+        .modal-overlay.active .modal {
+            transform: translateY(0);
+        }
+
+        .modal h2 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .modal p {
+            margin-bottom: 25px;
+            color: #ccc;
+            line-height: 1.5;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent), #6200ea);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(124, 77, 255, 0.3);
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(124, 77, 255, 0.5);
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Responsive */
+        @media (max-width: 450px) {
+            :root { --cell-size: 90px; }
+            h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>INFINITE TIC TAC TOE</h1>
+        <div class="rules">Max 3 marks. Placing the 4th removes the oldest!</div>
+    </header>
+
+    <div class="status-bar">
+        <div class="turn-indicator">
+            <span id="statusText">Your Turn</span>
+            <div id="turnDot" class="turn-dot"></div>
+        </div>
+        <div class="counter" id="markCounter">Marks: 0/3</div>
+    </div>
+
+    <main class="game-container">
+        <div id="board" class="board">
+            <!-- Cells generated by JS -->
+        </div>
+    </main>
+
+    <!-- Game Over Modal -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal">
+            <h2 id="winnerText">You Won!</h2>
+            <p id="winMessage">Great strategy.</p>
+            <button class="btn" onclick="resetGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const BOARD_SIZE = 3;
+        const MAX_MARKS_PER_PLAYER = 3;
+        const PLAYER = 1;
+        const AI = 2;
+        const EMPTY = 0;
+
+        // --- State ---
+        let board = []; 
+        let playerMoves = []; // Stores player's move history (FIFO queue)
+        let aiMoves = [];     // Stores AI's move history (FIFO queue)
+        let gameActive = true;
+        let currentPlayer = PLAYER;
+
+        // --- DOM Elements ---
+        const boardElement = document.getElementById('board');
+        const statusText = document.getElementById('statusText');
+        const turnDot = document.getElementById('turnDot');
+        const markCounter = document.getElementById('markCounter');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const winnerText = document.getElementById('winnerText');
+        const winMessage = document.getElementById('winMessage');
+
+        // --- Initialization ---
+        function initGame() {
+            board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
+            playerMoves = [];
+            aiMoves = [];
+            gameActive = true;
+            currentPlayer = PLAYER;
+            
+            updateStatus();
+            renderBoard();
+            modalOverlay.classList.remove('active');
+        }
+
+        // --- Core Logic ---
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.r = r;
+                    cell.dataset.c = c;
+                    
+                    if (board[r][c] !== EMPTY) {
+                        const piece = document.createElement('div');
+                        piece.classList.add('piece');
+                        piece.classList.add(board[r][c] === PLAYER ? 'player' : 'ai');
+                        cell.appendChild(piece);
+                    }
+
+                    cell.addEventListener('click', () => handleCellClick(r, c));
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function handleCellClick(r, c) {
+            if (!gameActive || board[r][c] !== EMPTY || currentPlayer !== PLAYER) return;
+
+            executeMove(r, c, PLAYER);
+        }
+
+        function executeMove(r, c, player) {
+            let currentHistory = (player === PLAYER) ? playerMoves : aiMoves;
+
+            // 1. CHECK REMOVAL RULE
+            // If player already has 3 marks, the oldest one disappears BEFORE/DURING placing the new one
+            if (currentHistory.length >= MAX_MARKS_PER_PLAYER) {
+                const oldMove = currentHistory.shift(); // Remove first item (oldest)
+                
+                // Update Logical Board
+                // Important: Ensure we only remove if it's still that player's mark
+                // (Edge case: In some complex variants you might overwrite, but here we only click empty squares)
+                board[oldMove.r][oldMove.c] = EMPTY;
+                
+                // Visual Removal
+                removePieceVisual(oldMove.r, oldMove.c);
+            }
+
+            // 2. PLACE NEW MARK
+            board[r][c] = player;
+            currentHistory.push({ r, c });
+
+            // Visual Placement
+            const index = r * BOARD_SIZE + c;
+            const cell = boardElement.children[index];
+            const piece = document.createElement('div');
+            piece.classList.add('piece');
+            piece.classList.add(player === PLAYER ? 'player' : 'ai');
+            cell.appendChild(piece);
+
+            // 3. CHECK WIN
+            const winPath = checkWin(player);
+            if (winPath) {
+                endGame(player, winPath);
+                return;
+            }
+
+            // 4. SWITCH TURN
+            currentPlayer = (player === PLAYER) ? AI : PLAYER;
+            updateStatus();
+
+            // 5. TRIGGER AI
+            if (currentPlayer === AI && gameActive) {
+                setTimeout(aiMove, 500); // Slightly longer delay to see removal animation
+            }
+        }
+
+        function removePieceVisual(r, c) {
+            const index = r * BOARD_SIZE + c;
+            const cell = boardElement.children[index];
+            const piece = cell.querySelector('.piece');
+            
+            if (piece) {
+                piece.classList.add('removing');
+                setTimeout(() => {
+                    if (cell.contains(piece)) cell.removeChild(piece);
+                }, 400);
+            }
+        }
+
+        // --- AI Logic ---
+        function aiMove() {
+            if (!gameActive) return;
+
+            // 1. Can I win now?
+            let winningMove = findWinningMove(AI);
+            if (winningMove) {
+                executeMove(winningMove.r, winningMove.c, AI);
+                return;
+            }
+
+            // 2. Must I block Player?
+            let blockingMove = findWinningMove(PLAYER);
+            if (blockingMove) {
+                executeMove(blockingMove.r, blockingMove.c, AI);
+                return;
+            }
+
+            // 3. Strategy
+            // Since pieces disappear, taking Center is key for creating multiple lines.
+            if (board[1][1] === EMPTY) {
+                executeMove(1, 1, AI);
+                return;
+            }
+
+            // Corners
+            const corners = [[0,0], [0,2], [2,0], [2,2]];
+            for (let [r, c] of corners) {
+                if (board[r][c] === EMPTY) {
+                    executeMove(r, c, AI);
+                    return;
+                }
+            }
+
+            // Sides
+            const sides = [[0,1], [1,0], [1,2], [2,1]];
+            for (let [r, c] of sides) {
+                if (board[r][c] === EMPTY) {
+                    executeMove(r, c, AI);
+                    return;
+                }
+            }
+        }
+
+        function findWinningMove(player) {
+            // This helper ignores the "3 limit" rule for a split second to see if a spot wins NOW
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] === EMPTY) {
+                        board[r][c] = player;
+                        if (checkWin(player)) {
+                            board[r][c] = EMPTY; // Undo
+                            return {r, c};
+                        }
+                        board[r][c] = EMPTY; // Undo
+                    }
+                }
+            }
+            return null;
+        }
+
+        function checkWin(player) {
+            const directions = [
+                { dr: 0, dc: 1 },  // Row
+                { dr: 1, dc: 0 },  // Col
+                { dr: 1, dc: 1 },  // Diag \
+                { dr: 1, dc: -1 }  // Diag /
+            ];
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] !== player) continue;
+
+                    for (let { dr, dc } of directions) {
+                        let path = [{r, c}];
+                        let win = true;
+
+                        for (let i = 1; i < 3; i++) {
+                            const nr = r + dr * i;
+                            const nc = c + dc * i;
+                            if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && board[nr][nc] === player) {
+                                path.push({r: nr, c: nc});
+                            } else {
+                                win = false;
+                                break;
+                            }
+                        }
+
+                        if (win) return path;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function updateStatus() {
+            // Show marks for the CURRENT player, or the next player?
+            // Usually helpful to see YOUR marks count. Let's show Player count if Player turn, AI count if AI turn.
+            
+            if (currentPlayer === PLAYER) {
+                statusText.textContent = "Your Turn";
+                statusText.style.color = "var(--player-color)";
+                turnDot.classList.remove('ai-turn');
+                markCounter.textContent = `Your Marks: ${playerMoves.length}/${MAX_MARKS_PER_PLAYER}`;
+            } else {
+                statusText.textContent = "AI Thinking...";
+                statusText.style.color = "var(--ai-color)";
+                turnDot.classList.add('ai-turn');
+                markCounter.textContent = `AI Marks: ${aiMoves.length}/${MAX_MARKS_PER_PLAYER}`;
+            }
+        }
+
+        function endGame(winner, winPath) {
+            gameActive = false;
+            
+            if (winner === PLAYER) {
+                winnerText.textContent = "You Won!";
+                winnerText.style.color = "var(--player-color)";
+                winMessage.textContent = "Your timing was perfect.";
+            } else {
+                winnerText.textContent = "AI Won!";
+                winnerText.style.color = "var(--ai-color)";
+                winMessage.textContent = "The algorithm prevails.";
+            }
+
+            if (winPath) {
+                winPath.forEach(({r, c}) => {
+                    const index = r * BOARD_SIZE + c;
+                    boardElement.children[index].classList.add('win-highlight');
+                });
+            }
+
+            setTimeout(() => {
+                modalOverlay.classList.add('active');
+            }, 1000);
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Start
+        initGame();
+
+    </script>
+</body>
+</html>
